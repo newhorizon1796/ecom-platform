@@ -8,6 +8,11 @@ metadata:
     {{- include "ecom-app.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.frontend.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: frontend

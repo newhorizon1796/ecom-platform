@@ -8,6 +8,16 @@ metadata:
     {{- include "ecom-app.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.backend.replicas }}
+  # maxSurge: 0 — replace pods one-at-a-time instead of surging an extra one
+  # alongside the old pod during rollout. Dev/qa's ResourceQuota has no spare
+  # headroom for old+new to coexist (found the hard way — quota rejected the
+  # surge pod); this trades a few seconds of downtime for not needing 2x
+  # capacity, a real tradeoff for tightly-constrained environments.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: backend
