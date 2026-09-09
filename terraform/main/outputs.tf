@@ -41,3 +41,15 @@ output "rds_master_secret_arn" {
 output "jira_integration_secret_arn" {
   value = aws_secretsmanager_secret.jira_integration.arn
 }
+
+output "prod_server_public_ip" {
+  value = aws_instance.prod_server.public_ip
+}
+
+output "prod_agent_public_ip" {
+  value = aws_instance.prod_agent.public_ip
+}
+
+output "nonprod_node_public_ip" {
+  value = aws_instance.nonprod_node.public_ip
+}

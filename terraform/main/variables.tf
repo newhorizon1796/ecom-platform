@@ -32,3 +32,9 @@ variable "azs" {
   type        = list(string)
   default     = ["ap-south-1a", "ap-south-1b"]
 }
+
+variable "ssh_public_key_path" {
+  description = "Path to your local SSH public key (.pub) — the matching private key never touches Terraform/AWS, it stays on your machine only"
+  type        = string
+  default     = "~/.ssh/ecom-platform-admin.pub"
+}
