@@ -87,9 +87,14 @@ terraform apply
 
 Public subnets are tagged `kubernetes.io/role/elb = 1` so AWS Load Balancer Controller can auto-discover them later.
 
-### IAM + ECR
+### IAM + ECR (done)
 
-*(filled in as we build)*
+- **ECR:** `ecom-platform/frontend` and `ecom-platform/backend` repos, scan-on-push enabled, lifecycle policy keeps last 10 images.
+- **IAM role `ecom-platform-k3s-node`** (+ matching instance profile), attached to every EC2 node. Not EKS, so no IRSA — pods needing AWS API access (AWS Load Balancer Controller, External Secrets Operator) inherit permissions from the node's instance profile via EC2 metadata. Fine at this scale; a real multi-team cluster would isolate this per-pod instead (kiam/kube2iam, or migrate to EKS+IRSA).
+  - `AmazonEC2ContainerRegistryReadOnly` — pull images
+  - Custom `secrets-read` policy — scoped to `secretsmanager:GetSecretValue`/`DescribeSecret` on `ecom-platform/*` secrets only
+  - AWS Load Balancer Controller policy (standard upstream policy, `terraform/main/policies/alb-controller-policy.json`) — lets the controller manage the NLB fronting Kong
+  - `CloudWatchAgentServerPolicy` — node-level metrics/logs alongside in-cluster Prometheus
 
 ### RDS + Secrets Manager
 
