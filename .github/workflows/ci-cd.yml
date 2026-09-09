@@ -91,9 +91,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Runner lives ON the nonprod node itself — EC2 instances can't reach
+      # their own public IP from inside the VPC (no hairpin NAT through the
+      # IGW), so use the node's local k3s kubeconfig, not the public-IP
+      # kubeconfig copy meant for external (your laptop's) access.
       - name: Refresh ECR pull secret
         run: |
-          export KUBECONFIG=~/.kube/ecom-nonprod.yaml
+          export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
           kubectl create secret docker-registry ecr-cred \
             --docker-server=${{ env.ECR_REGISTRY }} \
             --docker-username=AWS \
@@ -102,7 +106,7 @@ jobs:
 
       - name: Helm upgrade - dev
         run: |
-          export KUBECONFIG=~/.kube/ecom-nonprod.yaml
+          export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
           helm upgrade --install ecom-dev helm/ecom-app -f helm/values/dev.yaml -n dev \
             --set backend.tag=${{ needs.build-scan-push.outputs.image_tag }} \
             --set frontend.tag=${{ needs.build-scan-push.outputs.image_tag }}
@@ -116,12 +120,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # prod is a genuinely different host (reachable via its public IP);
+      # qa/staging run on THIS node's own cluster, so use the local
+      # kubeconfig — same self-reachability issue as deploy-dev above.
       - name: Set kubeconfig for target environment
         run: |
           if [ "${{ inputs.environment }}" = "prod" ]; then
             echo "KUBECONFIG_FILE=~/.kube/ecom-prod.yaml" >> "$GITHUB_ENV"
           else
-            echo "KUBECONFIG_FILE=~/.kube/ecom-nonprod.yaml" >> "$GITHUB_ENV"
+            echo "KUBECONFIG_FILE=/etc/rancher/k3s/k3s.yaml" >> "$GITHUB_ENV"
           fi
 
       - name: Refresh ECR pull secret
