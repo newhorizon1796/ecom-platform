@@ -96,9 +96,14 @@ Public subnets are tagged `kubernetes.io/role/elb = 1` so AWS Load Balancer Cont
   - AWS Load Balancer Controller policy (standard upstream policy, `terraform/main/policies/alb-controller-policy.json`) — lets the controller manage the NLB fronting Kong
   - `CloudWatchAgentServerPolicy` — node-level metrics/logs alongside in-cluster Prometheus
 
-### RDS + Secrets Manager
+### RDS + Secrets Manager (done)
 
-*(filled in as we build)*
+- **RDS MySQL** `db.t3.micro`, engine 8.0, `publicly_accessible = false` (reachable only from the `k3s-node` SG, not the internet), no Multi-AZ, no backups, `skip_final_snapshot = true` — all deliberate for an ephemeral practice project, not something you'd do for a real prod DB.
+- Master password auto-generated (`random_password`), stored in Secrets Manager at `ecom-platform/rds-master` — never appears in this repo or chat.
+- Separate logical databases (`prod`, `staging`) are created manually via SQL once a k3s node exists to run `mysql` client from (RDS SG only allows the `k3s-node` SG, not your admin IP directly) — documented in the "Application build & local test" section once we get there.
+- **Jira integration secret** at `ecom-platform/jira-integration` — Terraform creates the secret shell with a placeholder; the real `{email, api_token}` value is set manually via `aws secretsmanager put-secret-value` (never committed, never round-tripped through chat) — consumed later by the webhook-receiver for CPU-alert → Jira ticket automation.
+
+⚠️ **If you ever paste a real API token or password into a chat/terminal session that gets logged, treat it as compromised and rotate it** — this happened once during this build (Jira token pasted into the assistant chat) and the token was regenerated as a result.
 
 ### EC2 (k3s nodes)
 
