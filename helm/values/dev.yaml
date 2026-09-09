@@ -1,0 +1,6 @@
+namespace: dev
+mysql:
+  useRDS: false
+  databaseName: ecom
+ingress:
+  host: "" # path-based routing for now; set once Cloudflare DNS exists

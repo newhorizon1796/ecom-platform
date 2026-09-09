@@ -1,0 +1,10 @@
+namespace: prod
+mysql:
+  useRDS: true
+  databaseName: ecom_prod # separate logical DB on the shared RDS instance
+ingress:
+  host: ""
+backend:
+  replicas: 2 # only prod runs >1 replica — dev/qa/staging stay single-pod to fit node capacity
+frontend:
+  replicas: 2

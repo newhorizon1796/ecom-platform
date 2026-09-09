@@ -10,10 +10,13 @@ metadata:
   namespace: dev
 spec:
   hard:
-    requests.cpu: "200m"
-    requests.memory: 256Mi
-    limits.cpu: "400m"
-    limits.memory: 384Mi
+    # EP-3 fix: raised to actually fit frontend+backend+in-cluster mysql
+    # together (was sized before the workload's real resource requests
+    # existed, never cross-checked afterward).
+    requests.cpu: "250m"
+    requests.memory: 400Mi
+    limits.cpu: "700m"
+    limits.memory: 768Mi
     pods: "5"
 ---
 apiVersion: v1

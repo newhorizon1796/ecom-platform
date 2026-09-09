@@ -1,0 +1,6 @@
+namespace: qa
+mysql:
+  useRDS: false
+  databaseName: ecom
+ingress:
+  host: ""

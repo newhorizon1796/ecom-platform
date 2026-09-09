@@ -1,0 +1,104 @@
+{{- if not .Values.mysql.useRDS }}
+# dev/qa only — staging/prod use the shared RDS instance instead (no
+# resources below get created when mysql.useRDS is true).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-init
+  namespace: {{ .Values.namespace }}
+data:
+  init.sql: |
+{{ .Files.Get "files/init.sql" | indent 4 }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-data
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .Values.mysql.inCluster.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # single-instance DB — never run 2 pods against the same PVC
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: {{ .Values.mysql.inCluster.image }}
+          # Second correction on top of the first EP-3 fix: 192Mi was still
+          # not enough — MySQL 8.0's defaults (128Mi InnoDB buffer pool alone,
+          # plus performance_schema overhead) exceeded it and got OOMKilled.
+          # Capping MySQL's own memory-hungry settings explicitly, rather
+          # than just raising the container limit and hoping, so this is
+          # actually right-sized instead of barely fitting.
+          args:
+            - "--innodb-buffer-pool-size=64M"
+            - "--performance-schema=OFF"
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: DB_PASSWORD
+            - name: MYSQL_DATABASE
+              value: {{ .Values.mysql.databaseName }}
+            - name: MYSQL_ROOT_HOST
+              # Official mysql image only creates root@localhost by default —
+              # without this, connections from other pods (backend) are
+              # rejected with "Host '...' is not allowed to connect", even
+              # with the correct password.
+              value: "%"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+            - name: init-script
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            # EP-3 fix: was requesting 256Mi against a namespace quota that
+            # only had 256Mi total to give — leaving zero room for
+            # frontend+backend. Right-sized for a small practice DB, and
+            # cross-checked against the dev/qa ResourceQuota below.
+            requests:
+              cpu: 50m
+              memory: 192Mi
+            limits:
+              cpu: 200m
+              memory: 320Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mysql-data
+        - name: init-script
+          configMap:
+            name: mysql-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
+{{- end }}
