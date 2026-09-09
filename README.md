@@ -186,7 +186,24 @@ kubectl config use-context ecom-prod    # or ecom-nonprod
 
 ## Application build & local test
 
-*(filled in as we build)*
+Stack: **React (Vite) frontend, Node.js/Express backend, MySQL 8.0**. Cart is client-held; the server is the source of truth for pricing/discount math (never trust a client-supplied total).
+
+Run the full stack locally with Docker Compose — this is the "initial local testing" step referenced elsewhere in this README (catching bugs before they ever reach CI):
+
+```
+docker compose up --build
+```
+
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:4000/api/products
+- MySQL: localhost:3306 (seeded automatically from `app/backend/db/init.sql` on first start)
+
+Try a full flow: add a few different products to the cart, apply discount code `WELCOME10` or `SUMMER20` at checkout, confirm the discount is applied to the **summed cart subtotal** (not just one line item) and the order total matches what you'd expect by hand.
+
+Tear down local containers + volume when done testing:
+```
+docker compose down -v
+```
 
 ## Helm deploys
 
