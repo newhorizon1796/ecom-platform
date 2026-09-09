@@ -46,7 +46,7 @@ jobs:
         run: docker build -t frontend:${{ steps.tag.outputs.tag }} ./app/frontend
 
       - name: Trivy scan - backend
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: backend:${{ steps.tag.outputs.tag }}
           severity: CRITICAL,HIGH
@@ -54,7 +54,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Trivy scan - frontend
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: frontend:${{ steps.tag.outputs.tag }}
           severity: CRITICAL,HIGH
