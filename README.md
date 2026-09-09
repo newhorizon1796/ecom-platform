@@ -65,6 +65,38 @@ Outputs (`tfstate_bucket`, `tflock_table`) feed the backend config for `terrafor
 
 ## Core infrastructure (Terraform)
 
+All commands below run from `terraform/main`. First time only, copy `terraform.tfvars.example` to `terraform.tfvars` and set `admin_cidr` to your own public IPv4 (`/32`) — get it with:
+```
+(Invoke-WebRequest -Uri "https://api.ipify.org").Content
+```
+
+```
+cd terraform/main
+terraform init
+terraform plan
+terraform apply
+```
+
+### Networking (done)
+
+1 VPC (`10.20.0.0/16`), 2 public subnets across 2 AZs (`ap-south-1a`/`1b` — required even for a single-AZ RDS instance, which needs a subnet group spanning ≥2 AZs), 1 Internet Gateway, 1 public route table.
+
+**No NAT Gateway** — deliberate cost tradeoff (~$32/mo alone would blow the ₹300/day cap). All k3s nodes sit in public subnets with public IPs; isolation comes entirely from security groups, not network placement:
+- `k3s-node` SG: SSH (22) and kube-API (6443) restricted to `admin_cidr` only; HTTP/HTTPS (80/443) open to the world (arrives via the NLB); all traffic between nodes in the SG allowed (covers flannel VXLAN, kubelet, NodePort range without hand-enumerating every k3s-internal port).
+- `rds` SG: MySQL (3306) only from the `k3s-node` SG.
+
+Public subnets are tagged `kubernetes.io/role/elb = 1` so AWS Load Balancer Controller can auto-discover them later.
+
+### IAM + ECR
+
+*(filled in as we build)*
+
+### RDS + Secrets Manager
+
+*(filled in as we build)*
+
+### EC2 (k3s nodes)
+
 *(filled in as we build)*
 
 ## k3s cluster bring-up
@@ -111,12 +143,14 @@ Teardown order matters — generally the reverse of build order (delete the thin
 
 ### 1. Terraform-managed resources (core infra — VPC/EC2/RDS/ECR/IAM/Secrets Manager)
 
+Destroys everything in `terraform/main` in one shot (Terraform handles dependency order automatically — e.g. EC2/RDS before their security groups, subnets before the VPC):
+
 ```
 cd terraform/main
 terraform destroy
 ```
 
-*(this section itself doesn't exist yet — added once terraform/main is built)*
+Currently covers: VPC, 2 subnets, IGW, route table, 2 security groups + their rules. More resources will be added to this same destroy as the build progresses — nothing extra to run per-phase, this one command always tears down everything `terraform/main` currently manages.
 
 ### 2. Terraform remote-state bootstrap (destroy LAST — after everything above, since core infra's state lives here)
 
