@@ -21,11 +21,17 @@ resource "aws_iam_role" "github_actions" {
       Action = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
-          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:aud"        = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:repository" = "newhorizon1796/ecom-platform"
         }
         StringLike = {
-          # Scoped to this repo only — any branch/PR within it.
-          "token.actions.githubusercontent.com:sub" = "repo:newhorizon1796/ecom-platform:*"
+          # AWS requires the trust policy to condition on sub or
+          # job_workflow_ref specifically (not just other claims like
+          # "repository" alone) — a guardrail against overly-broad OIDC
+          # trust policies. GitHub's sub format now embeds numeric owner/repo
+          # IDs (discovered by decoding a real token during setup):
+          # "repo:owner@ownerID/repo@repoID:ref:refs/heads/BRANCH"
+          "token.actions.githubusercontent.com:sub" = "repo:newhorizon1796@287635122/ecom-platform@1362452566:*"
         }
       }
     }]
