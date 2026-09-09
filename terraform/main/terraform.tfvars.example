@@ -1,0 +1,5 @@
+# Copy this to terraform.tfvars (gitignored — never commit your real IP-restricted access rules
+# alongside the fact that they exist... actually the CIDR itself isn't secret, but keeping
+# environment-specific values out of git is good practice regardless) and fill in your own values.
+
+admin_cidr = "203.0.113.5/32" # replace with YOUR public IP, /32 suffix required
