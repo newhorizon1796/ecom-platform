@@ -42,6 +42,10 @@ output "incluster_mysql_secret_arn" {
   value = aws_secretsmanager_secret.incluster_mysql.arn
 }
 
+output "github_actions_role_arn" {
+  value = aws_iam_role.github_actions.arn
+}
+
 output "jira_integration_secret_arn" {
   value = aws_secretsmanager_secret.jira_integration.arn
 }

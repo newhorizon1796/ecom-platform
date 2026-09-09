@@ -1,0 +1,143 @@
+name: CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to promote to (qa, staging, or prod)"
+        required: true
+        type: choice
+        options: [qa, staging, prod]
+      image_tag:
+        description: "Image tag to deploy (e.g. a short git SHA from a previous build)"
+        required: true
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REGISTRY: 839931788764.dkr.ecr.ap-south-1.amazonaws.com
+  ECR_FRONTEND: ecom-platform/frontend
+  ECR_BACKEND: ecom-platform/backend
+
+permissions:
+  id-token: write   # required for OIDC -> AWS role assumption
+  contents: read
+
+jobs:
+  # Hosted runner: build, scan, and (on merge to main) push to ECR.
+  build-scan-push:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: tag
+        run: echo "tag=sha-${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+      - name: Build backend image
+        run: docker build -t backend:${{ steps.tag.outputs.tag }} ./app/backend
+
+      - name: Build frontend image
+        run: docker build -t frontend:${{ steps.tag.outputs.tag }} ./app/frontend
+
+      - name: Trivy scan - backend
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: backend:${{ steps.tag.outputs.tag }}
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: Trivy scan - frontend
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: frontend:${{ steps.tag.outputs.tag }}
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true
+
+      # Only push on an actual merge to main — PRs just build+scan as a gate.
+      - name: Configure AWS credentials (OIDC)
+        if: github.event_name == 'push'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::839931788764:role/ecom-platform-github-actions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        if: github.event_name == 'push'
+        run: aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+
+      - name: Push images
+        if: github.event_name == 'push'
+        run: |
+          docker tag backend:${{ steps.tag.outputs.tag }} ${{ env.ECR_REGISTRY }}/${{ env.ECR_BACKEND }}:${{ steps.tag.outputs.tag }}
+          docker tag frontend:${{ steps.tag.outputs.tag }} ${{ env.ECR_REGISTRY }}/${{ env.ECR_FRONTEND }}:${{ steps.tag.outputs.tag }}
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_BACKEND }}:${{ steps.tag.outputs.tag }}
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_FRONTEND }}:${{ steps.tag.outputs.tag }}
+
+  # Self-hosted runner (on the nonprod node): auto-deploy to dev on every
+  # merge to main. qa/staging/prod are deliberately NOT automatic — those
+  # go through the manual "promote" job below, a real promotion gate.
+  deploy-dev:
+    needs: build-scan-push
+    if: github.event_name == 'push'
+    runs-on: [self-hosted, ecom-deploy]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refresh ECR pull secret
+        run: |
+          export KUBECONFIG=~/.kube/ecom-nonprod.yaml
+          kubectl create secret docker-registry ecr-cred \
+            --docker-server=${{ env.ECR_REGISTRY }} \
+            --docker-username=AWS \
+            --docker-password=$(aws ecr get-login-password --region ${{ env.AWS_REGION }}) \
+            -n dev --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Helm upgrade - dev
+        run: |
+          export KUBECONFIG=~/.kube/ecom-nonprod.yaml
+          helm upgrade --install ecom-dev helm/ecom-app -f helm/values/dev.yaml -n dev \
+            --set backend.tag=${{ needs.build-scan-push.outputs.image_tag }} \
+            --set frontend.tag=${{ needs.build-scan-push.outputs.image_tag }}
+          kubectl rollout status deployment/backend -n dev --timeout=120s
+          kubectl rollout status deployment/frontend -n dev --timeout=120s
+
+  # Manual promotion to qa / staging / prod, via workflow_dispatch.
+  promote:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, ecom-deploy]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set kubeconfig for target environment
+        run: |
+          if [ "${{ inputs.environment }}" = "prod" ]; then
+            echo "KUBECONFIG_FILE=~/.kube/ecom-prod.yaml" >> "$GITHUB_ENV"
+          else
+            echo "KUBECONFIG_FILE=~/.kube/ecom-nonprod.yaml" >> "$GITHUB_ENV"
+          fi
+
+      - name: Refresh ECR pull secret
+        run: |
+          export KUBECONFIG=${{ env.KUBECONFIG_FILE }}
+          kubectl create secret docker-registry ecr-cred \
+            --docker-server=${{ env.ECR_REGISTRY }} \
+            --docker-username=AWS \
+            --docker-password=$(aws ecr get-login-password --region ${{ env.AWS_REGION }}) \
+            -n ${{ inputs.environment }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Helm upgrade - ${{ inputs.environment }}
+        run: |
+          export KUBECONFIG=${{ env.KUBECONFIG_FILE }}
+          helm upgrade --install ecom-${{ inputs.environment }} helm/ecom-app -f helm/values/${{ inputs.environment }}.yaml -n ${{ inputs.environment }} \
+            --set backend.tag=${{ inputs.image_tag }} \
+            --set frontend.tag=${{ inputs.image_tag }}
+          kubectl rollout status deployment/backend -n ${{ inputs.environment }} --timeout=120s
+          kubectl rollout status deployment/frontend -n ${{ inputs.environment }} --timeout=120s
