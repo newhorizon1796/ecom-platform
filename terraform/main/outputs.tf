@@ -29,3 +29,15 @@ output "k3s_node_instance_profile" {
 output "k3s_node_role_arn" {
   value = aws_iam_role.k3s_node.arn
 }
+
+output "rds_endpoint" {
+  value = aws_db_instance.main.address
+}
+
+output "rds_master_secret_arn" {
+  value = aws_secretsmanager_secret.rds_master.arn
+}
+
+output "jira_integration_secret_arn" {
+  value = aws_secretsmanager_secret.jira_integration.arn
+}
