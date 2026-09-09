@@ -50,7 +50,18 @@ Real, running AWS e-commerce platform built for hands-on Senior SRE prep. **Ephe
 
 ## Terraform remote-state bootstrap
 
-*(filled in as we build)*
+Creates the S3 bucket + DynamoDB lock table that all other Terraform in this repo stores its state in. Uses **local** state itself (chicken-and-egg — nothing can point at a backend that doesn't exist yet).
+
+```
+cd terraform/bootstrap
+terraform init
+terraform plan
+terraform apply
+```
+
+Resources created: S3 bucket `ecom-platform-tfstate-<account-id>` (versioned, AES256-encrypted, all public access blocked), DynamoDB table `ecom-platform-tflock` (pay-per-request billing — no idle cost).
+
+Outputs (`tfstate_bucket`, `tflock_table`) feed the backend config for `terraform/main`.
 
 ## Core infrastructure (Terraform)
 
@@ -96,4 +107,29 @@ Real, running AWS e-commerce platform built for hands-on Senior SRE prep. **Ephe
 
 **Standing requirement: this section must stay complete and accurate throughout the build — nothing should keep billing after the practice day ends.**
 
-*(filled in as we build; each section above will append its own teardown commands here)*
+Teardown order matters — generally the reverse of build order (delete the things that *depend on* other things first). This section is appended to as each part of the build is added.
+
+### 1. Terraform-managed resources (core infra — VPC/EC2/RDS/ECR/IAM/Secrets Manager)
+
+```
+cd terraform/main
+terraform destroy
+```
+
+*(this section itself doesn't exist yet — added once terraform/main is built)*
+
+### 2. Terraform remote-state bootstrap (destroy LAST — after everything above, since core infra's state lives here)
+
+```
+cd terraform/bootstrap
+terraform destroy
+```
+
+⚠️ This deletes the state bucket/lock table itself — only run this after `terraform/main`'s destroy has succeeded and you're fully done with the whole project, not between sessions.
+
+### 3. GitHub repo
+
+Not billed, but if you want to remove it once the practice is over:
+```
+gh repo delete newhorizon1796/ecom-platform --yes
+```
