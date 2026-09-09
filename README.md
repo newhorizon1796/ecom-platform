@@ -129,7 +129,60 @@ ssh -i ~/.ssh/ecom-platform-admin ubuntu@<public-ip>
 
 ## k3s cluster bring-up
 
-*(filled in as we build — manual SSH install, not automated)*
+Installed by hand over SSH, not via `user_data` — deliberate, this is one of the hands-on skill-gap areas this project exists to close.
+
+### Prod cluster (server + agent)
+
+SSH into `prod_server_public_ip`, install as server (Traefik/ServiceLB disabled — using Kong + a real AWS NLB instead):
+```
+ssh -i ~/.ssh/ecom-platform-admin ubuntu@<prod_server_public_ip>
+curl -sfL https://get.k3s.io | sh -s - server --disable traefik --disable servicelb --write-kubeconfig-mode 644
+kubectl get nodes   # confirm Ready
+sudo cat /var/lib/rancher/k3s/server/node-token   # save this, needed by the agent
+```
+
+In a **second terminal**, SSH into `prod_agent_public_ip` and join it using the server's **private** IP (traffic stays inside the VPC, not over the internet):
+```
+ssh -i ~/.ssh/ecom-platform-admin ubuntu@<prod_agent_public_ip>
+curl -sfL https://get.k3s.io | K3S_URL=https://<prod_server_private_ip>:6443 K3S_TOKEN=<token from above> sh -
+```
+
+Back on the server: `kubectl get nodes` should show both nodes `Ready`.
+
+### Non-prod cluster (single node)
+
+Same server install command on `nonprod_node_public_ip`, standalone (no join):
+```
+ssh -i ~/.ssh/ecom-platform-admin ubuntu@<nonprod_node_public_ip>
+curl -sfL https://get.k3s.io | sh -s - server --disable traefik --disable servicelb --write-kubeconfig-mode 644
+```
+
+Then create the `dev`/`qa`/`staging` namespaces with their quotas (manifests live in `k8s/base/namespaces/`) — paste the combined YAML via `kubectl apply -f -` in that SSH session, or `kubectl apply -f k8s/base/namespaces/` from a machine with kubeconfig access once that's set up (below). Staging gets prod-equivalent `ResourceQuota`/`LimitRange`; dev/qa get smaller ones — all sized conservatively to actually fit a shared `t3.small` (2 vCPU/2GiB total).
+
+### Local kubectl access
+
+k3s's self-signed server cert only covers its private IP by default — needs a `--tls-san` entry for the public IP or your local `kubectl` will fail TLS verification. On **each** node:
+```
+sudo sh -c 'echo "tls-san:
+  - \"<node-public-ip>\"" > /etc/rancher/k3s/config.yaml'
+sudo systemctl restart k3s
+```
+
+Then pull each kubeconfig via `scp` (never paste kubeconfig content into chat — it's a full-admin credential) and rewrite the server address + rename from the generic `default` context so both can coexist:
+```
+scp -i ~/.ssh/ecom-platform-admin ubuntu@<prod_server_public_ip>:/etc/rancher/k3s/k3s.yaml ~/.kube/ecom-prod.yaml
+scp -i ~/.ssh/ecom-platform-admin ubuntu@<nonprod_node_public_ip>:/etc/rancher/k3s/k3s.yaml ~/.kube/ecom-nonprod.yaml
+```
+```powershell
+(Get-Content ~/.kube/ecom-prod.yaml) -replace '127.0.0.1','<prod_server_public_ip>' -replace 'default','ecom-prod' | Set-Content ~/.kube/ecom-prod.yaml
+(Get-Content ~/.kube/ecom-nonprod.yaml) -replace '127.0.0.1','<nonprod_node_public_ip>' -replace 'default','ecom-nonprod' | Set-Content ~/.kube/ecom-nonprod.yaml
+```
+```powershell
+$env:KUBECONFIG = "$HOME\.kube\ecom-prod.yaml;$HOME\.kube\ecom-nonprod.yaml"
+kubectl config get-contexts
+kubectl config use-context ecom-prod    # or ecom-nonprod
+```
+(Set `KUBECONFIG` permanently via System Environment Variables so it persists across terminal sessions.)
 
 ## Application build & local test
 

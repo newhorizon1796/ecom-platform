@@ -1,0 +1,38 @@
+# Staging gets prod-equivalent ResourceQuota/LimitRange even though it's
+# co-located with dev/qa on cheaper shared hardware (locked spec decision).
+# Sized to actually fit a t3.small (2 vCPU / 2GiB total, shared 3 ways plus
+# k3s system overhead) — these are NOT real prod-scale numbers, they're
+# "prod-equivalent" only in the sense of being the largest/least-restrictive
+# tier relative to dev/qa on this node.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: staging-quota
+  namespace: staging
+spec:
+  hard:
+    requests.cpu: "400m"
+    requests.memory: 512Mi
+    limits.cpu: "800m"
+    limits.memory: 768Mi
+    pods: "8"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: staging-limits
+  namespace: staging
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 200m
+        memory: 256Mi
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi

@@ -53,3 +53,7 @@ output "prod_agent_public_ip" {
 output "nonprod_node_public_ip" {
   value = aws_instance.nonprod_node.public_ip
 }
+
+output "prod_server_private_ip" {
+  value = aws_instance.prod_server.private_ip
+}
