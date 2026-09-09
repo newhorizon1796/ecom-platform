@@ -105,13 +105,31 @@ Public subnets are tagged `kubernetes.io/role/elb = 1` so AWS Load Balancer Cont
 
 ⚠️ **If you ever paste a real API token or password into a chat/terminal session that gets logged, treat it as compromised and rotate it** — this happened once during this build (Jira token pasted into the assistant chat) and the token was regenerated as a result.
 
-### EC2 (k3s nodes)
+### EC2 (k3s nodes) (done)
 
-*(filled in as we build)*
+3× `t3.small` (locked sizing — real ₹300/day budget covers this comfortably even worst-case, prioritizing "must actually run properly" over squeezing into free-tier micro instances). Ubuntu 22.04 LTS. No k3s installed via `user_data` — that's done by hand over SSH in the next section, deliberately: hands-on k3s install/join is one of the confirmed skill-gap areas this whole project exists to close.
+
+First time only, generate an admin SSH key pair (Terraform imports only the **public** half — the private key never leaves your machine, never touches state or this repo):
+```
+ssh-keygen -t ed25519 -f "$HOME\.ssh\ecom-platform-admin" -C "ecom-platform-admin" -N '""'
+```
+Set `ssh_public_key_path` in `terraform.tfvars` to the resulting `.pub` file's full path.
+
+| Node | Role | Cluster |
+|---|---|---|
+| `ecom-platform-prod-server` | k3s server | prod |
+| `ecom-platform-prod-agent` | k3s agent | prod |
+| `ecom-platform-nonprod-node` | k3s server (single-node) | nonprod — hosts `dev`/`qa`/`staging` namespaces |
+
+SSH in with:
+```
+ssh -i ~/.ssh/ecom-platform-admin ubuntu@<public-ip>
+```
+(public IPs are in Terraform outputs: `prod_server_public_ip`, `prod_agent_public_ip`, `nonprod_node_public_ip`)
 
 ## k3s cluster bring-up
 
-*(filled in as we build)*
+*(filled in as we build — manual SSH install, not automated)*
 
 ## Application build & local test
 
