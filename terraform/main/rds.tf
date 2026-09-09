@@ -72,3 +72,31 @@ resource "aws_secretsmanager_secret_version" "rds_master" {
     port     = aws_db_instance.main.port
   })
 }
+
+# dev/qa use an in-cluster MySQL pod instead of RDS (item 12 of the spec),
+# but "no hardcoded secrets anywhere" (item 8) applies just as much there —
+# this secret is synced into the nonprod cluster the same way rds_master is
+# synced into prod, via External Secrets Operator.
+resource "random_password" "incluster_mysql" {
+  length  = 24
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "incluster_mysql" {
+  name                     = "${var.project}/incluster-mysql"
+  description              = "Root/app password for the dev/qa in-cluster MySQL pod"
+  recovery_window_in_days  = 0
+
+  tags = {
+    Project = var.project
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "incluster_mysql" {
+  secret_id = aws_secretsmanager_secret.incluster_mysql.id
+  secret_string = jsonencode({
+    username = "root"
+    password = random_password.incluster_mysql.result
+    database = "ecom"
+  })
+}

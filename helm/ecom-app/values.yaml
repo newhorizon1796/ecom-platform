@@ -1,0 +1,50 @@
+# Defaults — every per-environment file in helm/values/ overrides just what
+# differs for that environment. Nothing here should need editing directly;
+# edit the per-env values files instead.
+
+namespace: dev
+
+frontend:
+  image: "839931788764.dkr.ecr.ap-south-1.amazonaws.com/ecom-platform/frontend"
+  tag: "v1"
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 150m
+      memory: 128Mi
+
+backend:
+  image: "839931788764.dkr.ecr.ap-south-1.amazonaws.com/ecom-platform/backend"
+  tag: "v1"
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 200m
+      memory: 192Mi
+
+# dev/qa: in-cluster MySQL pod (useRDS: false).
+# staging/prod: shared RDS instance, credentials synced from AWS Secrets
+# Manager via External Secrets Operator (useRDS: true).
+mysql:
+  useRDS: false
+  databaseName: "ecom" # logical DB name — overridden per-env (ecom_prod / ecom_staging)
+  inCluster:
+    image: "mysql:8.0"
+    storage: 2Gi
+
+# Jira integration secret (webhook-receiver only — not used by frontend/backend)
+jira:
+  secretName: "jira-integration"
+
+ingress:
+  enabled: true
+  className: kong
+  host: "" # set per-environment, e.g. dev.ecom.example.com
+
+deploymentStrategy: rolling # or "blue-green" — see README for the blue-green procedure, which uses a second release rather than this flag directly

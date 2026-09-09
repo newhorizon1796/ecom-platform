@@ -1,0 +1,6 @@
+namespace: staging
+mysql:
+  useRDS: true
+  databaseName: ecom_staging # separate logical DB on the shared RDS instance
+ingress:
+  host: ""

@@ -38,6 +38,10 @@ output "rds_master_secret_arn" {
   value = aws_secretsmanager_secret.rds_master.arn
 }
 
+output "incluster_mysql_secret_arn" {
+  value = aws_secretsmanager_secret.incluster_mysql.arn
+}
+
 output "jira_integration_secret_arn" {
   value = aws_secretsmanager_secret.jira_integration.arn
 }

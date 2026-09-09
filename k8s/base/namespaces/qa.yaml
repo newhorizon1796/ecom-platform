@@ -10,10 +10,11 @@ metadata:
   namespace: qa
 spec:
   hard:
-    requests.cpu: "200m"
-    requests.memory: 256Mi
-    limits.cpu: "400m"
-    limits.memory: 384Mi
+    # EP-3 fix: same rationale as dev — see k8s/base/namespaces/dev.yaml.
+    requests.cpu: "250m"
+    requests.memory: 400Mi
+    limits.cpu: "700m"
+    limits.memory: 768Mi
     pods: "5"
 ---
 apiVersion: v1
